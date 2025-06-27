@@ -1,0 +1,221 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Calculadora Ley de Biot-Savart</title>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script type="text/javascript" async
+    src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML">
+  </script>
+  <style>
+    body { font-family: Arial; padding: 20px; }
+    input { margin: 5px; }
+    .segmento { margin-bottom: 10px; }
+    #explicacion { display: none; }
+  </style>
+</head>
+<body>
+  <h1>Calculadora de la Ley de Biot-Savart</h1>
+
+  <label>Corriente (I en Amperios):</label>
+  <input type="number" id="corriente" step="any"><br>
+
+  <label>Punto de observación (x, y, z):</label>
+  <input type="number" id="px" step="any">
+  <input type="number" id="py" step="any">
+  <input type="number" id="pz" step="any"><br>
+
+  <h3>Segmentos de corriente</h3>
+  <div id="segmentos"></div>
+  <button onclick="agregarSegmento()">Agregar segmento</button><br><br>
+
+  <button onclick="calcularCampo()">Calcular campo magnético</button>
+  <button onclick="resetear()">Resetear</button>
+
+  <h2>Resultado:</h2>
+  <pre id="resultado"></pre>
+
+  <div id="grafica" style="width: 100%; height: 600px;"></div>
+
+  <button onclick="toggleExplicacion()">Ver explicación</button>
+  <div id="explicacion">
+    <h3>Explicación del resultado</h3>
+    <p>El campo magnético total calculado en el punto de observación es el resultado de <strong>sumar vectorialmente</strong> las contribuciones de cada segmento de corriente. Cada segmento genera un pequeño campo magnético en el espacio, cuya dirección y magnitud dependen de:</p>
+    <ul>
+      <li>La dirección del segmento de corriente (\( ec{dl} \))</li>
+      <li>La posición del punto de observación respecto al segmento (\( ec{r} \))</li>
+      <li>La distancia entre el segmento y el punto de observación</li>
+    </ul>
+    <p>La <strong>Ley de Biot-Savart</strong> nos dice que el campo magnético \( ec{B} \) en un punto es proporcional al producto cruzado entre \( ec{dl} \) y \( ec{r} \), e inversamente proporcional al cubo de la distancia entre ellos.</p>
+    <p><strong>Regla de la mano derecha</strong>: Si apuntas el pulgar en la dirección de la corriente y los dedos hacia el punto de observación, el campo magnético saldrá perpendicular a la palma.</p>
+    <p><strong>¿Qué significa el resultado?</strong></p>
+    <ul>
+      <li><strong>Bx, By, Bz</strong>: Son las componentes del campo magnético en cada eje.</li>
+      <li><strong>|B|</strong>: Es la magnitud total del campo magnético, es decir, qué tan fuerte es el campo en ese punto.</li>
+      <li>La <strong>dirección del vector \( ec{B} \)</strong> indica hacia dónde apunta el campo magnético en el espacio.</li>
+    </ul>
+  </div>
+
+  <script>
+    const mu0 = 4 * Math.PI * 1e-7;
+
+    function agregarSegmento() {
+      const div = document.createElement('div');
+      div.className = 'segmento';
+      div.innerHTML = `
+        <label>Inicio (x1, y1, z1):</label>
+        <input type="number" step="any" class="x1">
+        <input type="number" step="any" class="y1">
+        <input type="number" step="any" class="z1">
+        <label>Fin (x2, y2, z2):</label>
+        <input type="number" step="any" class="x2">
+        <input type="number" step="any" class="y2">
+        <input type="number" step="any" class="z2">
+      `;
+      document.getElementById('segmentos').appendChild(div);
+    }
+
+    function calcularCampo() {
+      const I = parseFloat(document.getElementById('corriente').value);
+      const px = parseFloat(document.getElementById('px').value);
+      const py = parseFloat(document.getElementById('py').value);
+      const pz = parseFloat(document.getElementById('pz').value);
+
+      if (isNaN(I) || isNaN(px) || isNaN(py) || isNaN(pz)) {
+        alert("Por favor, ingrese todos los datos necesarios.");
+        return;
+      }
+
+      const obs = [px, py, pz];
+      const segmentoDivs = document.querySelectorAll('.segmento');
+      let B = [0, 0, 0];
+      let traces = [];
+      let tabla = "<table border='1'><tr><th>Segmento</th><th>dl</th><th>r</th><th>dl × r</th><th>Contribución a B</th></tr>";
+
+      segmentoDivs.forEach((div, index) => {
+        const x1 = parseFloat(div.querySelector('.x1').value);
+        const y1 = parseFloat(div.querySelector('.y1').value);
+        const z1 = parseFloat(div.querySelector('.z1').value);
+        const x2 = parseFloat(div.querySelector('.x2').value);
+        const y2 = parseFloat(div.querySelector('.y2').value);
+        const z2 = parseFloat(div.querySelector('.z2').value);
+
+        if (isNaN(x1) || isNaN(y1) || isNaN(z1) || isNaN(x2) || isNaN(y2) || isNaN(z2)) {
+          return;
+        }
+
+        const dl = [x2 - x1, y2 - y1, z2 - z1];
+        const mid = [(x1 + x2) / 2, (y1 + y2) / 2, (z1 + z2) / 2];
+        const r = [obs[0] - mid[0], obs[1] - mid[1], obs[2] - mid[2]];
+        const rMag = Math.sqrt(r[0]**2 + r[1]**2 + r[2]**2);
+        const cross = [
+          dl[1]*r[2] - dl[2]*r[1],
+          dl[2]*r[0] - dl[0]*r[2],
+          dl[0]*r[1] - dl[1]*r[0]
+        ];
+        const factor = mu0 / (4 * Math.PI * rMag**3);
+        const contribucion = [factor * I * cross[0], factor * I * cross[1], factor * I * cross[2]];
+        B[0] += contribucion[0];
+        B[1] += contribucion[1];
+        B[2] += contribucion[2];
+
+        // Agregar segmento a la gráfica
+        traces.push({
+          type: 'scatter3d',
+          mode: 'lines',
+          x: [x1, x2],
+          y: [y1, y2],
+          z: [z1, z2],
+          line: { width: 5, color: 'blue' },
+          name: 'Segmento'
+        });
+
+        // Agregar vectores dl y r a la gráfica
+        traces.push({
+          type: 'scatter3d',
+          mode: 'lines',
+          x: [mid[0], mid[0] + dl[0]],
+          y: [mid[1], mid[1] + dl[1]],
+          z: [mid[2], mid[2] + dl[2]],
+          line: { width: 3, color: 'cyan' },
+          name: 'dl'
+        });
+        traces.push({
+          type: 'scatter3d',
+          mode: 'lines',
+          x: [mid[0], mid[0] + r[0]],
+          y: [mid[1], mid[1] + r[1]],
+          z: [mid[2], mid[2] + r[2]],
+          line: { width: 3, color: 'magenta' },
+          name: 'r'
+        });
+
+        // Agregar fila a la tabla
+        tabla += `<tr><td>${index + 1}</td><td>[${dl.map(x => x.toFixed(2))}]</td><td>[${r.map(x => x.toFixed(2))}]</td><td>[${cross.map(x => x.toFixed(2))}]</td><td>[${contribucion.map(x => x.toExponential(2).replace('e', ' × 10^'))}]</td></tr>`;
+      });
+
+      // Punto de observación
+      traces.push({
+        type: 'scatter3d',
+        mode: 'markers',
+        x: [obs[0]],
+        y: [obs[1]],
+        z: [obs[2]],
+        marker: { size: 6, color: 'red' },
+        name: 'Punto de observación'
+      });
+
+      // Vector del campo magnético
+      traces.push({
+        type: 'cone',
+        x: [obs[0]],
+        y: [obs[1]],
+        z: [obs[2]],
+        u: [B[0]],
+        v: [B[1]],
+        w: [B[2]],
+        sizemode: 'absolute',
+        sizeref: 0.2,
+        anchor: 'tail',
+        colorscale: [[0, 'green'], [1, 'green']],
+        showscale: false,
+        name: 'Campo magnético'
+      });
+
+      Plotly.newPlot('grafica', traces, {
+        margin: { t: 0 },
+        scene: {
+          xaxis: { title: 'X' },
+          yaxis: { title: 'Y' },
+          zaxis: { title: 'Z' }
+        }
+      });
+
+      tabla += "</table>";
+      document.getElementById('resultado').innerHTML =
+        `Bx = ${B[0].toExponential(3).replace('e', ' × 10^')} T<br>By = ${B[1].toExponential(3).replace('e', ' × 10^')} T<br>Bz = ${B[2].toExponential(3).replace('e', ' × 10^')} T<br>|B| = ${Math.sqrt(B[0]**2 + B[1]**2 + B[2]**2).toExponential(3).replace('e', ' × 10^')} T<br><br>${tabla}`;
+    }
+
+    function resetear() {
+      document.getElementById('corriente').value = '';
+      document.getElementById('px').value = '';
+      document.getElementById('py').value = '';
+      document.getElementById('pz').value = '';
+      document.getElementById('segmentos').innerHTML = '';
+      document.getElementById('resultado').innerHTML = '';
+      Plotly.purge('grafica');
+    }
+
+    function toggleExplicacion() {
+      const explicacion = document.getElementById('explicacion');
+      if (explicacion.style.display === 'none') {
+        explicacion.style.display = 'block';
+      } else {
+        explicacion.style.display = 'none';
+      }
+    }
+  </script>
+</body>
+</html>
